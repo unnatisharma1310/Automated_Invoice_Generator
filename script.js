@@ -2,6 +2,7 @@
 "use strict";
 
 const $ = id => document.getElementById(id);
+const API_BASE = "http://127.0.0.1:5000/api";
 
 function on(id, eventName, handler) {
   const el = $(id);
@@ -52,6 +53,61 @@ function notify(message) {
   notify.timer = setTimeout(() => {
     toast.style.display = "none";
   }, 3000);
+}
+
+async function fetchProductsFromBackend() {
+  const response = await fetch(`${API_BASE}/products`);
+
+  if (!response.ok) {
+    throw new Error("Products API failed: " + response.status);
+  }
+
+  const data = await response.json();
+
+  return data.map(p => ({
+    id: Number(p.product_id),
+    name: p.name,
+    sku: `SKU-${p.product_id}`,
+    price: Number(p.price),
+    stock: Number(p.stock_quantity || 0),
+    threshold: Number(p.minimum_stock || 0),
+    gst: 0,
+
+    // Backend mein batch table abhi confirm nahi hai,
+    // isliye filhaal ek legacy batch banega.
+    batches: [{
+      id: `legacy-${p.product_id}`,
+      number: `LEGACY-SKU-${p.product_id}`,
+      stock: Number(p.stock_quantity || 0),
+      expiryDate: ""
+    }]
+  }));
+}
+
+
+async function fetchInvoicesFromBackend() {
+  const response = await fetch(`${API_BASE}/invoices`);
+
+  if (!response.ok) {
+    throw new Error("Invoices could not be loaded.");
+  }
+
+  const data = await response.json();
+
+  return data.map(inv => ({
+    id: `INV-${inv.invoice_id}`,
+    customer: inv.customer_name,
+    customerId: inv.customer_id,
+    date: inv.invoice_date,
+    status: "Pending",
+    total: Number(inv.total_amount),
+    subtotal: Number(inv.total_amount),
+    discount: 0,
+    tax: 0,
+    quantity: 0,
+    productName: "Invoice details",
+    items: []
+  }));
 }
 
 /* ---------- PRODUCT DATA AND MIGRATION ---------- */
@@ -356,12 +412,14 @@ on("date", "change", () => {
   }
 });
 
-/* SAVE INVOICE */
 
-on("invoiceForm", "submit", event => {
+/* SAVE INVOICE - BACKEND CONNECTED */
+
+on("invoiceForm", "submit", async event => {
   event.preventDefault();
 
   const customer = $("customer")?.value.trim() || "";
+  const email = $("email")?.value.trim() || "";
   const pair = selectedPair();
 
   const product = pair
@@ -369,17 +427,23 @@ on("invoiceForm", "submit", event => {
     : null;
 
   const batch = pair && product
-    ? product.batches.find(b => String(b.id) === String(pair.batchId))
+    ? product.batches.find(
+        b => String(b.id) === String(pair.batchId)
+      )
     : null;
 
   const calculation = calculateInvoice();
 
   if (!customer || !product || !batch) {
-    return notify("Please enter customer details and select a product batch.");
+    return notify(
+      "Please enter customer details and select a product batch."
+    );
   }
 
   if (!batchSellable(batch)) {
-    return notify("This batch is expired, has no expiry date, or has no stock.");
+    return notify(
+      "This batch is expired, has no expiry date, or has no stock."
+    );
   }
 
   if (
@@ -387,7 +451,9 @@ on("invoiceForm", "submit", event => {
     calculation.quantity < 1 ||
     calculation.quantity > batch.stock
   ) {
-    return notify("Enter a valid quantity within the selected batch's available stock.");
+    return notify(
+      "Enter a valid quantity within available batch stock."
+    );
   }
 
   const discountRate = Number($("discount")?.value) || 0;
@@ -400,42 +466,117 @@ on("invoiceForm", "submit", event => {
     return notify("Please check the price and discount.");
   }
 
-  const invoice = {
-    id: "INV-" + nextInvoiceId,
-    customer,
-    email: $("email")?.value.trim() || "",
-    date: $("date")?.value || todayISO(),
-    status: $("status")?.value || "Pending",
-    productId: product.id,
-    productName: product.name,
-    sku: product.sku,
-    batchId: batch.id,
-    batchNumber: batch.number,
-    batchExpiry: batch.expiryDate,
-    quantity: calculation.quantity,
-    price: calculation.price,
-    subtotal: calculation.subtotal,
-    discount: calculation.discount,
-    tax: calculation.tax,
-    gst: Number($("gst")?.value) || 0,
-    total: calculation.total
-  };
+  try {
+    // 1. Customer ko database mein save karo
+    const customerResponse = await fetch(
+      `${API_BASE}/customers`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          name: customer,
+          email: email,
+          phone: "",
+          address: ""
+        })
+      }
+    );
 
-  batch.stock -= calculation.quantity;
-  product.stock = totalStock(product);
+    const customerResult = await customerResponse.json();
 
-  invoices.unshift(invoice);
-  currentInvoice = invoice;
-  nextInvoiceId++;
+    if (!customerResponse.ok) {
+      throw new Error(
+        customerResult.error || "Customer save failed."
+      );
+    }
 
-  saveData();
-  renderAll();
+    const customerId = Number(customerResult.customer_id);
 
-  if ($("invoiceNumber")) {
-    $("invoiceNumber").textContent = invoice.id;
+    if (!customerId) {
+      throw new Error("Customer ID was not returned by backend.");
+    }
+
+    // 2. Invoice backend ko bhejo
+    const invoiceResponse = await fetch(
+      `${API_BASE}/invoices`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          customer_id: customerId,
+          items: [
+            {
+              product_id: product.id,
+              quantity: calculation.quantity
+            }
+          ]
+        })
+      }
+    );
+
+    const invoiceResult = await invoiceResponse.json();
+
+    if (!invoiceResponse.ok) {
+      throw new Error(
+        invoiceResult.error || "Invoice creation failed."
+      );
+    }
+
+    // 3. Backend se latest products/stock reload karo
+    products = await fetchProductsFromBackend();
+
+    // 4. Invoice ko frontend display ke liye prepare karo
+    const invoice = {
+      id: "INV-" + invoiceResult.invoice_id,
+      customer: customer,
+      email: email,
+      date: $("date")?.value || todayISO(),
+      status: $("status")?.value || "Pending",
+      productId: product.id,
+      productName: product.name,
+      sku: product.sku,
+      batchId: batch.id,
+      batchNumber: batch.number,
+      batchExpiry: batch.expiryDate,
+      quantity: calculation.quantity,
+      price: calculation.price,
+      subtotal: calculation.subtotal,
+      discount: calculation.discount,
+      tax: calculation.tax,
+      gst: Number($("gst")?.value) || 0,
+
+      // Backend total is authoritative for the saved invoice
+      total: Number(invoiceResult.total_amount)
+    };
+
+    invoices.unshift(invoice);
+    currentInvoice = invoice;
+    nextInvoiceId++;
+
+    saveData();
+    renderAll();
+
+    if ($("invoiceNumber")) {
+      $("invoiceNumber").textContent = invoice.id;
+    }
+
+    notify(
+      `Invoice ${invoice.id} saved to database successfully!`
+    );
+
+    console.log("Invoice created:", invoiceResult);
+
+  } catch (error) {
+    console.error("Invoice save failed:", error);
+
+    notify(
+      error.message || "Invoice save failed. Check backend."
+    );
   }
-
-  notify("Invoice saved. Selected batch stock updated.");
 });
 
 /* CLEAR FORM */
@@ -590,6 +731,7 @@ function renderExpiryAlerts() {
 
 /* ---------- INVOICE HISTORY ---------- */
 
+
 function renderInvoices() {
   const query = ($("invoiceSearch")?.value || "").toLowerCase();
 
@@ -606,22 +748,25 @@ function renderInvoices() {
       <td>${safe(invoice.id)}</td>
       <td>${safe(invoice.customer)}</td>
       <td>${safe(invoice.date)}</td>
-      <td>${safe(invoice.productName || "Product")}</td>
-      <td>${safe(invoice.batchNumber || "Legacy")}</td>
+      <td>${safe(invoice.productName || "Details unavailable")}</td>
+      <td>${safe(invoice.batchNumber || "—")}</td>
       <td>${money(invoice.total)}</td>
       <td>
         <span class="status ${invoice.status === "Pending" ? "pending" : ""}">
-          ${safe(invoice.status)}
+          ${safe(invoice.status || "Unknown")}
         </span>
       </td>
       <td>
-        <button class="btn secondary small-btn" data-print="${safe(invoice.id)}">Print</button>
-        <button class="btn secondary small-btn" data-status="${safe(invoice.id)}">Change Status</button>
+        <button class="btn secondary small-btn"
+          data-print="${safe(invoice.id)}">Print</button>
+        <button class="btn secondary small-btn"
+          data-status="${safe(invoice.id)}">Change Status</button>
       </td>
     </tr>
   `).join("") ||
     '<tr><td colspan="8" class="empty">No matching invoices found.</td></tr>';
 }
+
 
 on("invoiceTable", "click", event => {
   const printButton = event.target.closest("[data-print]");
@@ -869,23 +1014,20 @@ function renderInventory() {
   }
 }
 
-/* ADD NEW PRODUCT */
 
-on("productForm", "submit", event => {
+/* ADD NEW PRODUCT — CONNECTED TO BACKEND */
+
+on("productForm", "submit", async event => {
   event.preventDefault();
 
   const name = $("productName")?.value.trim() || "";
-  const sku = $("sku")?.value.trim() ||
-    "SKU-" + Date.now().toString().slice(-6);
-
+  const sku = $("sku")?.value.trim() || "";
   const price = Number($("productPrice")?.value);
   const stock = Number($("stock")?.value);
   const threshold = Number($("threshold")?.value || 0);
-  const batchNumber = $("batchNumber")?.value.trim() || "";
-  const expiryDate = $("expiryDate")?.value || "";
 
-  if (!name || !batchNumber) {
-  return notify("Enter product name and batch number.");
+  if (!name) {
+    return notify("Please enter product name.");
   }
 
   if (
@@ -896,45 +1038,49 @@ on("productForm", "submit", event => {
     !Number.isInteger(threshold) ||
     threshold < 0
   ) {
-    return notify("Check price, stock and low-stock threshold values.");
+    return notify("Please check price, stock and threshold.");
   }
 
-  if (products.some(p => p.sku.toLowerCase() === sku.toLowerCase())) {
-    return notify("This product ID already exists.");
+  try {
+    const response = await fetch(`${API_BASE}/products`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name: name,
+        price: price,
+        stock_quantity: stock,
+        minimum_stock: threshold
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || result.message || "Could not save product."
+      );
+    }
+
+    // Reload products from the backend after saving.
+    products = await fetchProductsFromBackend();
+
+    saveData();
+    event.target.reset();
+
+    if ($("threshold")) $("threshold").value = 5;
+
+    renderAll();
+    notify("Product saved to database successfully!");
+
+    console.log("Product saved by backend:", result);
+  } catch (error) {
+    console.error("Add product failed:", error);
+    notify("Product save failed. Check Console and backend.");
   }
-
-  if (products.some(p =>
-    p.batches.some(b => b.number.toLowerCase() === batchNumber.toLowerCase())
-  )) {
-    return notify("This batch number already exists.");
-  }
-
-  const product = {
-    id: Date.now(),
-    name,
-    sku,
-    price,
-    threshold,
-    gst: Number($("productGst")?.value) || 0,
-    batches: [{
-      id: `b-${Date.now()}`,
-      number: batchNumber,
-      stock,
-      expiryDate
-    }]
-  };
-
-  product.stock = stock;
-  products.push(product);
-
-  saveData();
-  event.target.reset();
-
-  if ($("threshold")) $("threshold").value = 5;
-
-  renderAll();
-  notify("Product and first batch added successfully.");
 });
+
 
 /* ADD BATCH TO EXISTING PRODUCT */
 
@@ -1247,6 +1393,21 @@ if ($("invoiceNumber")) {
   $("invoiceNumber").textContent = "INV-" + nextInvoiceId;
 }
 
-renderAll();
+
+async function initializeApp() {
+  try {
+    products = await fetchProductsFromBackend();
+    invoices = await fetchInvoicesFromBackend();
+
+    renderAll();
+    notify("Products and invoices loaded from database.");
+  } catch (error) {
+    console.error("Data loading failed:", error);
+    notify("Data load failed. Check backend and Console.");
+  }
+}
+
+initializeApp();
+
 
 })();

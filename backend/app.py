@@ -1,10 +1,11 @@
+from flask_cors import CORS
 from flask import send_file
 from io import BytesIO
 from flask import Flask, jsonify, request
 from database import get_connection, create_tables
 
 app = Flask(__name__)
-
+CORS(app)
 
 # Home route
 @app.route("/")
@@ -498,6 +499,9 @@ def create_invoice():
 
 # Get invoice history
 @app.route("/api/invoices", methods=["GET"])
+
+# Get invoice history with product details
+@app.route("/api/invoices", methods=["GET"])
 def get_invoices():
     connection = get_connection()
     cursor = connection.cursor(dictionary=True)
@@ -509,23 +513,37 @@ def get_invoices():
                 i.customer_id,
                 c.name AS customer_name,
                 i.invoice_date,
-                i.total_amount
+                i.total_amount,
+                ii.product_id,
+                p.name AS product_name,
+                ii.quantity,
+                ii.unit_price,
+                ii.line_total
             FROM invoices i
             JOIN customers c
                 ON i.customer_id = c.customer_id
+            LEFT JOIN invoice_items ii
+                ON i.invoice_id = ii.invoice_id
+            LEFT JOIN products p
+                ON ii.product_id = p.product_id
             ORDER BY i.invoice_id DESC
         """)
 
-        invoices = cursor.fetchall()
+        rows = cursor.fetchall()
 
-        for invoice in invoices:
-            if invoice["invoice_date"]:
-                invoice["invoice_date"] = (
-                    invoice["invoice_date"].isoformat()
-                )
-            invoice["total_amount"] = float(invoice["total_amount"])
+        for row in rows:
+            if row["invoice_date"]:
+                row["invoice_date"] = row["invoice_date"].isoformat()
 
-        return jsonify(invoices)
+            row["total_amount"] = float(row["total_amount"] or 0)
+
+            if row["unit_price"] is not None:
+                row["unit_price"] = float(row["unit_price"])
+
+            if row["line_total"] is not None:
+                row["line_total"] = float(row["line_total"])
+
+        return jsonify(rows)
 
     finally:
         cursor.close()
