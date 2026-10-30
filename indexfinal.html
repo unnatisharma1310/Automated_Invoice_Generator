@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InvoicePro | Automated Invoice Generator</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <h2 class="logo">Invoice<span>Pro</span></h2>
+    
+<p class="menu-title">MAIN MENU</p>
+
+<button class="nav active" data-page="dashboard">▦ Dashboard</button>
+<button class="nav" data-page="create">＋ Create Invoice</button>
+<button class="nav" data-page="invoices">▤ Invoice History</button>
+<button class="nav" data-page="customers">♙ Customers</button>
+<button class="nav" data-page="inventory">▣ Inventory</button>
+
+<p class="menu-title">BUSINESS INSIGHTS</p>
+
+<button class="nav" data-page="analytics">▥ Analytics</button>
+<button class="nav" data-page="expenses">₹ Expenses &amp; Profit</button>
+<button class="nav" data-page="payments">▤ Payment Tracking</button>
+
+<p class="menu-title">PREFERENCES</p>
+
+<button class="nav" data-page="settings">⚙ Settings</button>
+
+    <div class="sidebar-bottom"><small>Automated Invoice Generator System</small></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h3 id="pageTitle">Dashboard</h3>
+        <small>Manage your business in one place</small>
+      </div>
+      <div class="topbar-actions">
+        <div class="language-control">
+          <label for="pdfLanguage">Customer PDF Language</label>
+          <select id="pdfLanguage" aria-label="Choose customer invoice PDF language">
+            <option value="en">English</option>
+            <option value="hi">हिंदी (Hindi)</option>
+          </select>
+        </div>
+        <button class="btn primary" id="newInvoiceBtn">+ New Invoice</button>
+        
+        <button class="btn secondary" id="darkModeToggle" type="button" aria-pressed="false">
+          🌙 Dark Mode
+        </button>
+
+      </div>
+    </header>
+
+    <div class="content">
+      <section id="dashboard" class="page active">
+        <h1>Business Overview</h1>
+        <p class="subtitle">Welcome to your automated billing dashboard.</p>
+        
+        <div class="welcome-banner">
+          <div>
+            <span class="welcome-tag">INVOICEPRO WORKSPACE</span>
+            <h2>Welcome to Your Business Dashboard</h2>
+            <p>Track invoices, manage inventory, and monitor your business performance in one place.</p>
+          </div>
+          <div class="welcome-icon">₹</div>
+        </div>
+
+
+        <div class="stats">
+          <div class="stat-card"><span>Total Revenue</span><h2 id="revenue">₹0.00</h2><small>Saved invoice value</small></div>
+          <div class="stat-card"><span>Total Invoices</span><h2 id="invoiceCount">0</h2><small>Invoices generated</small></div>
+          <div class="stat-card"><span>Total Products</span><h2 id="productCount">0</h2><small>Products in inventory</small></div>
+          <div class="stat-card"><span>Low Stock Items</span><h2 id="lowStock">0</h2><small>Need restocking</small></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading">
+            <h2>Recent Invoices</h2>
+            <button class="btn secondary" data-go="invoices">View All</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Invoice ID</th><th>Customer</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead>
+              <tbody id="recentTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Expiry Alerts</h2>
+          <p class="subtitle compact">Batches expiring within 30 days or already expired.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Product</th><th>Batch</th><th>Expiry Date</th><th>Stock</th><th>Status</th></tr></thead>
+              <tbody id="expiryAlertTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Quick Actions</h2>
+          <div class="quick-actions">
+            <button class="btn primary" data-go="create">Create Invoice</button>
+            <button class="btn secondary" data-go="inventory">Manage Inventory</button>
+            <button class="btn secondary" data-go="analytics">View Analytics</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="create" class="page">
+        <h1>Create New Invoice</h1>
+        <p class="subtitle">Enter customer and product details.</p>
+
+        <div class="panel invoice-paper" id="invoicePaper">
+          <div class="invoice-header">
+            <div><h2>INVOICE</h2><p>InvoicePro Business Solutions</p></div>
+            <div class="invoice-number"><strong id="invoiceNumber"></strong><p id="invoiceDateLabel"></p></div>
+          </div>
+
+          <form id="invoiceForm">
+            <div class="form-grid">
+              <div class="field"><label for="customer">Customer Name *</label><input id="customer" required placeholder="Enter customer name"></div>
+              <div class="field"><label for="email">Customer Email</label><input id="email" type="email" placeholder="customer@example.com"></div>
+              
+<div class="field">
+  <label for="phone">Customer Mobile Number *</label>
+  <input
+    id="phone"
+    type="tel"
+    inputmode="tel"
+    autocomplete="tel"
+    placeholder="Enter customer mobile number"
+    required
+  >
+</div>
+
+              <div class="field"><label for="date">Invoice Date *</label><input id="date" type="date" required></div>
+              <div class="field"><label for="status">Payment Status</label><select id="status"><option>Pending</option><option>Paid</option></select></div>
+              <div class="field full">
+                <label for="product">Select Product / Batch *</label>
+                <select id="product" required></select>
+                <small id="batchHint" class="field-hint">Only batches with stock and valid expiry are available.</small>
+              </div>
+              <div class="field"><label for="quantity">Quantity *</label><input id="quantity" type="number" min="1" value="1" required></div>
+              <div class="field"><label for="price">Unit Price (₹)</label><input id="price" type="number" min="0" step="0.01" required></div>
+              <div class="field"><label for="discount">Discount (%)</label><input id="discount" type="number" min="0" max="100" value="0"></div>
+              <div class="field">
+                <label for="gst">GST (%)</label>
+                <select id="gst">
+                  <option value="0">0%</option><option value="5">5%</option><option value="12">12%</option>
+                  <option value="18" selected>18%</option><option value="28">28%</option>
+                </select>
+              </div>
+              
+<div class="field full">
+  <label>Additional Products</label>
+
+  <div id="additionalInvoiceItems"></div>
+
+  <button
+    type="button"
+    class="btn secondary"
+    id="addInvoiceItemBtn"
+  >
+    + Add Another Product
+  </button>
+
+  <small class="field-hint">
+    Add more products to include them in the same invoice.
+  </small>
+</div>
+
+            </div>
+
+            <div class="totals">
+              <div><span>Subtotal</span><strong id="subtotal">₹0.00</strong></div>
+              <div><span>Discount</span><strong id="discountAmount">₹0.00</strong></div>
+              <div><span>GST</span><strong id="taxAmount">₹0.00</strong></div>
+              <div class="grand-total"><span>Grand Total</span><strong id="grandTotal">₹0.00</strong></div>
+            </div>
+
+            <div class="form-actions no-print">
+              <button type="submit" class="btn primary">Save Invoice</button>
+              <button type="button" class="btn secondary" id="printBtn">Print / Save PDF</button>
+              <button type="reset" class="btn secondary" id="clearBtn">Clear</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section id="invoices" class="page">
+        <h1>Invoice History</h1>
+        <p class="subtitle">Search and manage your saved invoices.</p>
+        <div class="panel">
+          <div class="panel-heading">
+            <h2>All Invoices</h2>
+            <input id="invoiceSearch" class="search" placeholder="Search invoices...">
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Invoice ID</th><th>Customer</th><th>Date</th><th>Product</th><th>Batch</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody id="invoiceTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="inventory" class="page">
+        <h1>Inventory Management</h1>
+        <p class="subtitle">Manage products, batches, stock and expiry dates.</p>
+
+        <div class="panel">
+          <h2>Add New Product</h2>
+          <form id="productForm">
+            <div class="form-grid">
+              <div class="field"><label for="productName">Product Name *</label><input id="productName" required placeholder="Product name"></div>
+              <div class="field"><label for="sku">Product ID / SKU</label><input id="sku" placeholder="SKU-101"></div>
+              <div class="field"><label for="productPrice">Price (₹) *</label><input id="productPrice" type="number" min="0" step="0.01" required></div>
+              
+<div class="field">
+  <label for="productCost">Cost Price (₹) *</label>
+  <input
+    id="productCost"
+    type="number"
+    min="0"
+    step="0.01"
+    required
+    placeholder="Purchase cost per unit"
+  >
+</div>
+
+              <div class="field"><label for="stock">Initial Batch Stock *</label><input id="stock" type="number" min="0" step="1" required></div>
+              <div class="field"><label for="threshold">Low Stock Threshold</label><input id="threshold" type="number" min="0" value="5"></div>
+              <div class="field">
+                <label for="productGst">GST (%)</label>
+                <select id="productGst">
+                  <option value="0">0%</option><option value="5">5%</option><option value="12">12%</option>
+                  <option value="18" selected>18%</option><option value="28">28%</option>
+                </select>
+              </div>
+              <div class="field"><label for="batchNumber">Batch Number *</label><input id="batchNumber" required placeholder="BATCH-001"></div>
+              <div class="field"><label for="expiryDate">Expiry Date *</label><input id="expiryDate" type="date"></div>
+            </div>
+            <button type="submit" class="btn primary top-space">Add Product + First Batch</button>
+          </form>
+        </div>
+
+        <div class="panel">
+          <h2>Add Stock Batch to Existing Product</h2>
+          <form id="batchForm">
+            <div class="form-grid">
+              <div class="field"><label for="batchProduct">Select Product *</label><select id="batchProduct" required></select></div>
+              <div class="field"><label for="newBatchNumber">Batch Number *</label><input id="newBatchNumber" required placeholder="BATCH-002"></div>
+              <div class="field"><label for="newBatchStock">Batch Quantity *</label><input id="newBatchStock" type="number" min="1" step="1" required></div>
+              <div class="field"><label for="newBatchExpiry">Expiry Date *</label><input id="newBatchExpiry" type="date"></div>
+            </div>
+            <button type="submit" class="btn secondary">Add Batch</button>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading">
+            <h2>Product & Batch List</h2>
+            <input id="productSearch" class="search" placeholder="Search products or batches...">
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Product</th><th>SKU</th><th>Batch</th><th>Price</th><th>Batch Stock</th><th>Expiry Date</th><th>Expiry Status</th><th>Action</th></tr></thead>
+              <tbody id="productTable"></tbody>
+            </table>
+          </div>
+          <p class="field-hint">Legacy stock from your previous version is preserved as a batch. Use “Set Expiry” to add its expiry date.</p>
+        </div>
+      </section>
+
+      <section id="analytics" class="page">
+        <h1>Sales Analytics</h1>
+        <p class="subtitle">Reports based on saved invoices and batch inventory.</p>
+        <div class="stats">
+          <div class="stat-card"><span>Total Revenue</span><h2 id="aRevenue">₹0.00</h2></div>
+          <div class="stat-card"><span>Paid Invoices</span><h2 id="aPaid">0</h2></div>
+          <div class="stat-card"><span>Pending Invoices</span><h2 id="aPending">0</h2></div>
+          <div class="stat-card"><span>Inventory Value</span><h2 id="aInventory">₹0.00</h2></div>
+        </div>
+        <div class="panel"><h2>Revenue by Month</h2><div id="monthlyChart"></div></div>
+        <div class="panel"><h2>Top 5 Products by Quantity Sold — Current Month</h2><div id="monthlyTopQuantity"></div></div>
+        <div class="panel"><h2>Top 5 Products by Revenue — Current Month</h2><div id="monthlyTopRevenue"></div></div>
+        <div class="panel"><h2>Top Selling Products — All Time</h2><div id="topProducts"></div></div>
+        <div class="panel">
+  <h2>Top Selling Products — All Time</h2>
+  <div id="topProducts"></div>
+</div>
+
+<div class="panel">
+  <h2>Most Profitable Products — All Time</h2>
+  <p class="subtitle compact">
+    Products ranked by gross profit after discounts and before operating expenses.
+    GST is excluded from sales revenue.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Product</th>
+          <th>Units Sold</th>
+          <th>Net Sales</th>
+          <th>Cost of Goods</th>
+          <th>Gross Profit</th>
+          <th>Profit Margin</th>
+        </tr>
+      </thead>
+      <tbody id="mostProfitableTable"></tbody>
+    </table>
+  </div>
+</div>
+
+      </section>
+      
+<!-- Customers Page -->
+ 
+<section id="customers" class="page">
+  <h1>Customers</h1>
+  <p class="subtitle">Manage customer details and purchase history.</p>
+
+  <div class="panel">
+    <div class="panel-heading">
+      <h2>Customer Records</h2>
+      <input
+        id="customersSearch"
+        class="search"
+        type="search"
+        placeholder="Search name, phone or product..."
+      >
+    </div>
+
+    <p class="subtitle">
+      Customer details and purchases are collected from saved invoices.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Customer Name</th>
+            <th>Phone Number</th>
+            <th>Email</th>
+            <th>Products Purchased</th>
+            <th>Total Invoices</th>
+            <th>Total Purchase</th>
+            <th>Invoice History</th>
+          </tr>
+        </thead>
+        <tbody id="customersTable"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+
+<!-- Expenses & Profit Page -->
+
+<section id="expenses" class="page">
+  <h1>Expenses &amp; Profit</h1>
+  <p class="subtitle">Track business spending and estimated profit.</p>
+  
+<div class="field report-month-field">
+  <label for="expenseReportMonth">View Monthly Report</label>
+  <input type="month" id="expenseReportMonth">
+</div>
+
+
+  <div class="stats">
+    <div class="stat-card">
+      <span>Total Revenue</span>
+      <h2 id="expenseRevenue">₹0.00</h2>
+      <small>Total value of saved invoices</small>
+    </div>
+
+    <div class="stat-card">
+      <span>Total Expenses</span>
+      <h2 id="expenseTotal">₹0.00</h2>
+      <small>All recorded expenses</small>
+    </div>
+
+    <div class="stat-card">
+      <span>Estimated Profit</span>
+      <h2 id="estimatedProfit">₹0.00</h2>
+      <small>Revenue minus recorded expenses</small>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Add Business Expense</h2>
+    <p class="subtitle">Enter the details of a business expense.</p>
+
+    <form id="expenseForm">
+      <div class="form-grid">
+        <div class="field">
+          <label for="expenseDate">Expense Date *</label>
+          <input id="expenseDate" type="date" required>
+        </div>
+
+        <div class="field">
+          <label for="expenseCategory">Category *</label>
+          <select id="expenseCategory" required>
+            <option value="Rent">Shop Rent</option>
+            <option value="Utilities">Electricity &amp; Utilities</option>
+            <option value="Salary">Salaries</option>
+            <option value="Transport">Transport</option>
+            <option value="Stock Purchase">Stock Purchase</option>
+            <option value="Maintenance">Maintenance</option>
+            <option value="Marketing">Marketing</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="expenseDescription">Description *</label>
+          <input
+            id="expenseDescription"
+            type="text"
+            maxlength="150"
+            placeholder="e.g. October electricity bill"
+            required
+          >
+        </div>
+
+        <div class="field">
+          <label for="expenseAmount">Amount (₹) *</label>
+          <input
+            id="expenseAmount"
+            type="number"
+            min="0.01"
+            step="0.01"
+            placeholder="Enter amount"
+            required
+          >
+        </div>
+      </div>
+
+      <button type="submit" class="btn primary top-space">
+        + Save Expense
+      </button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <div class="panel-heading">
+      <h2>Expense History</h2>
+      <input
+        id="expenseSearch"
+        class="search"
+        type="search"
+        placeholder="Search expenses..."
+      >
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Category</th>
+            <th>Description</th>
+            <th>Amount</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="expenseTable"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+
+<!-- Payment Tracking Page -->
+
+<section id="payments" class="page">
+  <h1>Payment Tracking</h1>
+  <p class="subtitle">
+    Track received payments and outstanding customer balances.
+  </p>
+
+  <div class="stats">
+    <div class="stat-card">
+      <span>Total Paid</span>
+      <h2 id="paymentTotalPaid">₹0.00</h2>
+      <small>Payments marked as paid</small>
+    </div>
+
+    <div class="stat-card">
+      <span>Pending Amount</span>
+      <h2 id="paymentTotalPending">₹0.00</h2>
+      <small>Payments still to collect</small>
+    </div>
+
+    <div class="stat-card">
+      <span>Pending Invoices</span>
+      <h2 id="paymentPendingCount">0</h2>
+      <small>Invoices awaiting payment</small>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-heading">
+      <h2>Payment Records</h2>
+      <input
+        id="paymentSearch"
+        class="search"
+        type="search"
+        placeholder="Search customer, invoice or phone..."
+      >
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        
+<thead>
+  <tr>
+    <th>Invoice ID</th>
+    <th>Customer</th>
+    <th>Phone Number</th>
+    <th>Invoice Date</th>
+    <th>Invoice Amount</th>
+    <th>Paid So Far</th>
+    <th>Balance Due</th>
+    <th>Status</th>
+    <th>Payment History</th>
+    <th>Action</th>
+  </tr>
+</thead>
+
+        <tbody id="paymentTrackingTable"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+
+<!-- Settings Page -->
+ 
+<section id="settings" class="page">
+  <h1>Settings</h1>
+  <p class="subtitle">
+    Customize your business information, invoice preferences and appearance.
+  </p>
+
+  <div class="panel">
+    <h2>🏪 Business Information</h2>
+    <p class="subtitle">
+      These details will appear on your generated invoice PDFs.
+    </p>
+
+    <form id="settingsForm">
+      <div class="form-grid">
+        <div class="field">
+          <label for="settingsBusinessName">Business / Shop Name *</label>
+          <input
+            id="settingsBusinessName"
+            type="text"
+            maxlength="100"
+            placeholder="InvoicePro Business Solutions"
+            required
+          >
+        </div>
+
+        <div class="field">
+          <label for="settingsBusinessPhone">Business Phone Number</label>
+          <input
+            id="settingsBusinessPhone"
+            type="tel"
+            placeholder="Enter shop phone number"
+          >
+        </div>
+
+        <div class="field full">
+          <label for="settingsBusinessAddress">Business Address</label>
+          <input
+            id="settingsBusinessAddress"
+            type="text"
+            maxlength="200"
+            placeholder="Enter shop address"
+          >
+        </div>
+
+        <div class="field">
+          <label for="settingsBusinessEmail">Business Email</label>
+          <input
+            id="settingsBusinessEmail"
+            type="email"
+            placeholder="shop@example.com"
+          >
+        </div>
+      </div>
+
+      <div class="form-grid top-space">
+        <div class="field">
+          <label for="settingsDefaultGst">Default GST (%)</label>
+          <select id="settingsDefaultGst">
+            <option value="0">0%</option>
+            <option value="5">5%</option>
+            <option value="12">12%</option>
+            <option value="18">18%</option>
+            <option value="28">28%</option>
+          </select>
+          <small class="field-hint">
+            This will be the default GST for new invoices.
+          </small>
+        </div>
+
+        <div class="field">
+          <label for="settingsPdfLanguage">Default Invoice PDF Language</label>
+          <select id="settingsPdfLanguage">
+            <option value="en">English</option>
+            <option value="hi">हिंदी (Hindi)</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="btn primary top-space">
+        Save Settings
+      </button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>🎨 Appearance</h2>
+    <p class="subtitle">
+      Switch between the existing Light Mode and Dark Mode themes.
+    </p>
+
+    <button
+      type="button"
+      class="btn secondary"
+      id="settingsThemeToggle"
+    >
+      🌙 Toggle Light / Dark Mode
+    </button>
+  </div>
+</section>
+
+
+    </div>
+  </main>
+</div>
+<div id="toast" role="status"></div>
+<script src="./script.js"></script>
+</body>
+</html>
